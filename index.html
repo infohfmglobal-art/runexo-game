@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RuneXO • Dragon Board Duel</title>
+  <meta name="theme-color" content="#050b1a" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body class="theme-dragon">
+  <div id="app">
+
+    <!-- FRAMEWEAVE SPLASH -->
+    <section id="splashStudio" class="screen screen-center">
+      <div class="card splash-card studio-card">
+        <div class="studio-logo-circle">
+          <img src="images/stamp-frameweave.png" alt="Frameweave Studio" />
+        </div>
+        <div class="studio-text">
+          <div class="studio-name">FRAMEWEAVE STUDIO</div>
+          <div class="studio-presents">PRESENTS</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RUNEXO SPLASH -->
+    <section id="splashGame" class="screen screen-center hidden">
+      <div class="card splash-card game-card">
+        <div class="game-logo-circle">
+          <img src="images/logo-runexo-dragon.png" alt="RuneXO Dragon" />
+        </div>
+        <div class="game-title">RUNEXO</div>
+        <div class="game-subtitle">Dragon Board Duel</div>
+      </div>
+    </section>
+
+    <!-- HOME / LOBBY -->
+    <section id="home" class="screen screen-center hidden">
+      <div class="card home-card">
+        <header class="home-header">
+          <div class="home-title-block">
+            <h1 class="logo-text">RUNEXO</h1>
+            <p class="logo-sub">Dragon Board Duel</p>
+          </div>
+          <div class="home-dragon-icon">
+            <img src="images/logo-runexo-dragon.png" alt="RuneXO Dragon" />
+          </div>
+        </header>
+
+        <div class="home-grid">
+
+          <!-- LOGIN -->
+          <div class="home-section">
+            <h2>Login</h2>
+
+            <label class="field-label" for="nicknameInput">Your name</label>
+            <input id="nicknameInput" class="text-input" type="text"
+                  placeholder="Leave empty for &quot;Guest&quot;" />
+
+            <div class="home-login-buttons">
+              <button id="btnPlayGuest" class="btn primary">Play as Guest</button>
+              <button id="btnLoginGoogle" class="btn outline">Sign in with Google</button>
+            </div>
+
+            <p id="loginStatusText" class="helper-text">
+              Not signed in (Guest mode).
+            </p>
+
+            <div class="home-stats">
+              <div class="stat-box">
+                <div class="stat-label">PLAYER</div>
+                <div id="statPlayerName" class="stat-value">Guest</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">COINS</div>
+                <div id="statCoins" class="stat-value">500</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">BEST STREAK</div>
+                <div id="statBestStreak" class="stat-value">0</div>
+              </div>
+            </div>
+
+            <button id="btnLogout" class="btn ghost small hidden">Logout</button>
+          </div>
+
+          <!-- GAME SETTINGS -->
+          <div class="home-section">
+            <h2>Game Settings</h2>
+
+            <div class="setting-block">
+              <div class="setting-label">Board Theme</div>
+              <div class="chip-row" id="boardThemeRow">
+                <button class="chip chip-toggle active" data-theme="neon">Neon</button>
+                <button class="chip chip-toggle" data-theme="ocean">Ocean</button>
+                <button class="chip chip-toggle" data-theme="ember">Ember</button>
+              </div>
+            </div>
+
+            <div class="setting-block">
+              <div class="setting-label">Piece Skin</div>
+              <div class="chip-row" id="pieceSkinRow">
+                <button class="chip chip-toggle active" data-skin="xo">XO</button>
+                <button class="chip chip-toggle" data-skin="emoji">Emoji</button>
+                <button class="chip chip-toggle" data-skin="fruits">Fruits</button>
+                <button class="chip chip-toggle" data-skin="dragon">Dragon</button>
+                <button class="chip chip-toggle" data-skin="phoenix">Phoenix</button>
+              </div>
+            </div>
+
+            <div class="setting-block">
+              <div class="setting-label">CPU Difficulty</div>
+              <select id="difficultySelect" class="select-input">
+                <option value="easy">Easy</option>
+                <option value="normal" selected>Normal</option>
+                <option value="hard">Hard</option>
+              </select>
+            </div>
+
+            <div class="setting-block">
+              <div class="setting-label">Match Table (coins)</div>
+              <div class="chip-row" id="matchStakeRow">
+                <button class="chip chip-toggle active" data-stake="10">10</button>
+                <button class="chip chip-toggle" data-stake="25">25</button>
+                <button class="chip chip-toggle" data-stake="50">50</button>
+              </div>
+              <p class="helper-text">Entry fee is taken at start. You win 2x on victory.</p>
+            </div>
+          </div>
+
+          <!-- PLAY + AUDIO + LEADERBOARD -->
+          <div class="home-section home-section-right">
+            <h2>Play</h2>
+            <button id="btnPlayCpu" class="btn primary big">Play vs CPU</button>
+            <button id="btnOnlineComing" class="btn disabled big">Online (coming soon)</button>
+
+            <div class="home-controls-row">
+              <button id="btnToggleMusic" class="chip chip-toggle" data-on="true">
+                Music: On
+              </button>
+              <button id="btnToggleSfx" class="chip chip-toggle" data-on="true">
+                SFX: On
+              </button>
+            </div>
+
+            <button id="btnOpenLeaderboard" class="btn ghost">
+              Leaderboard
+            </button>
+
+            <div class="home-footer">
+              <span class="studio-mark">Frameweave Studio</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+    <!-- GAME SCREEN -->
+   <section id="game" class="screen screen-center hidden">
+      <div class="card game-card-main">
+        <header class="game-header">
+          <button id="btnBackHome" class="btn ghost small">&larr; Home</button>
+          <div class="game-header-center">
+            <div id="gameModeLabel" class="game-mode-label">Vs CPU - Normal</div>
+            <div id="gameStakeLabel" class="game-stake-label">10 coin match</div>
+          </div>
+          <div class="game-coins-label">
+            Coins: <span id="gameCoinsDisplay">0</span>
+          </div>
+        </header>
+
+        <div class="board-wrapper">
+          <div id="board" class="board">
+            <!-- cells created by JS -->
+          </div>
+
+        <div id="winLine" class="win-line hidden"></div>
+        </div>
+
+        <footer class="game-footer">
+          <div id="gameStatus" class="game-status">Your turn</div>
+          <div class="game-footer-buttons">
+            <button id="btnNewRound" class="btn secondary">New Round</button>
+            <button id="btnGiveUp" class="btn ghost">Give Up</button>
+          </div>
+          <div id="wlStats" class="wl-stats">W: 0  L: 0  D: 0</div>
+        </footer>
+
+        <div id="resultToast" class="result-toast hidden"></div>
+      </div>
+    </section>
+
+    <!-- LEADERBOARD MODAL -->
+    <div id="leaderboardOverlay" class="overlay hidden">
+      <div class="modal leaderboard-modal">
+        <header class="modal-header">
+          <h2>Local Leaderboard</h2>
+          <button id="btnCloseLeaderboard" class="icon-btn">&times;</button>
+        </header>
+        <p class="helper-text">
+          For now this shows your local stats. Firebase global rank will sync when online,
+          in shaa Allah.
+        </p>
+        <div id="leaderboardList" class="leaderboard-list"></div>
+        <footer class="modal-footer">
+          <button id="btnResetLeaderboard" class="btn ghost small">Reset leaderboard</button>
+        </footer>
+      </div>
+    </div>
+
+  </div> <!-- END APP WRAPPER -->
+
+
+  <!-- CrazyGames SDK (must load before game scripts) -->
+  <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+
+  <!-- Firebase compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <!-- Firebase config (must load after SDKs) -->
+  <script src="firebase-config.js"></script>
+
+  <!-- Game main logic -->
+  <script src="app.js"></script>
+
+  <!-- Service worker -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw.js").catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
