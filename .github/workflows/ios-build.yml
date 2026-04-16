@@ -40,12 +40,14 @@ jobs:
 
       - name: Import Distribution Certificate
         run: |
-          echo "${{ secrets.DISTRIBUTION_CERTIFICATE_P12 }}" | tr -d '\r\n ' | base64 --decode > distribution.p12
+          echo "${{ secrets.DISTRIBUTION_CERTIFICATE_PEM }}" > dist.pem
+          echo "${{ secrets.DISTRIBUTION_KEY }}" > dist.key
+          openssl pkcs12 -export -out distribution.p12 -inkey dist.key -in dist.pem -passout pass:build123
           echo "P12 file size: $(wc -c < distribution.p12) bytes"
           security create-keychain -p "temp_password" build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "temp_password" build.keychain
-          security import distribution.p12 -k build.keychain -P "${{ secrets.DISTRIBUTION_CERTIFICATE_PASSWORD }}" -T /usr/bin/codesign
+          security import distribution.p12 -k build.keychain -P "build123" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "temp_password" build.keychain
           security list-keychain -d user -s build.keychain
 
