@@ -1,0 +1,102 @@
+name: Build & Upload RuneXO iOS to App Store
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Extract iOS build package
+        run: |
+          tar -xzf runexo-ios-build.tar.gz
+          mv ios-build runexo-cap
+
+      - name: Install Capacitor dependencies
+        working-directory: runexo-cap
+        run: npm install
+
+      - name: Add iOS platform
+        working-directory: runexo-cap
+        run: npx cap add ios
+
+      - name: Sync web files
+        working-directory: runexo-cap
+        run: npx cap sync ios
+
+      - name: Install CocoaPods
+        working-directory: runexo-cap/ios/App
+        run: pod install
+
+      - name: Setup App Store Connect API Key
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "${{ secrets.APP_STORE_API_PRIVATE_KEY }}" > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_API_KEY_ID }}.p8
+
+      - name: Build & Archive
+        working-directory: runexo-cap/ios/App
+        run: |
+          xcodebuild archive \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -archivePath $RUNNER_TEMP/RuneXO.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_API_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.APP_STORE_API_KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.APP_STORE_API_ISSUER_ID }} \
+            CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Export IPA
+        run: |
+          cat > /tmp/ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>teamID</key>
+            <string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <key>uploadBitcode</key>
+            <false/>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>signingStyle</key>
+            <string>automatic</string>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/RuneXO.xcarchive \
+            -exportPath $RUNNER_TEMP/RuneXO-IPA \
+            -exportOptionsPlist /tmp/ExportOptions.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_API_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.APP_STORE_API_KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.APP_STORE_API_ISSUER_ID }}
+
+      - name: Upload to App Store Connect
+        run: |
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$RUNNER_TEMP/RuneXO-IPA/App.ipa" \
+            --apiKey ${{ secrets.APP_STORE_API_KEY_ID }} \
+            --apiIssuer ${{ secrets.APP_STORE_API_ISSUER_ID }}
+
+      - name: Upload IPA as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RuneXO-IPA
+          path: ${{ runner.temp }}/RuneXO-IPA/*.ipa
