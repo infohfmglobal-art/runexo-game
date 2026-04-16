@@ -57,6 +57,7 @@ jobs:
             -authenticationKeyID ${{ secrets.APP_STORE_API_KEY_ID }} \
             -authenticationKeyIssuerID ${{ secrets.APP_STORE_API_ISSUER_ID }} \
             CODE_SIGN_STYLE=Automatic \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}
 
       - name: Export IPA
