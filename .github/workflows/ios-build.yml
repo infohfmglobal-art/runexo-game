@@ -40,7 +40,8 @@ jobs:
 
       - name: Import Distribution Certificate
         run: |
-          echo "${{ secrets.DISTRIBUTION_CERTIFICATE_P12 }}" | base64 --decode > distribution.p12
+          echo "${{ secrets.DISTRIBUTION_CERTIFICATE_P12 }}" | tr -d '\r\n ' | base64 --decode > distribution.p12
+          echo "P12 file size: $(wc -c < distribution.p12) bytes"
           security create-keychain -p "temp_password" build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "temp_password" build.keychain
