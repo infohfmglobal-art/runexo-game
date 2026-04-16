@@ -34,6 +34,21 @@ jobs:
         working-directory: runexo-cap
         run: npx cap sync ios
 
+      - name: Patch Podfile for code signing
+        working-directory: runexo-cap/ios/App
+        run: |
+          cat >> Podfile << 'EOF'
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+      config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
+    end
+  end
+end
+EOF
+
       - name: Install CocoaPods
         working-directory: runexo-cap/ios/App
         run: pod install
