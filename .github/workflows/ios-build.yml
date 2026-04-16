@@ -36,7 +36,13 @@ jobs:
 
       - name: Patch Podfile for code signing
         working-directory: runexo-cap/ios/App
-        run: python3 -c "open('Podfile','a').write('\npost_install do |installer|\n  installer.pods_project.targets.each do |target|\n    target.build_configurations.each do |config|\n      config.build_settings[\"CODE_SIGNING_ALLOWED\"] = \"NO\"\n      config.build_settings[\"CODE_SIGNING_REQUIRED\"] = \"NO\"\n    end\n  end\nend\n')"
+        run: |
+          python3 -c "
+          content = open('Podfile').read()
+          patch = '  installer.pods_project.targets.each do |target|\n    target.build_configurations.each do |config|\n      config.build_settings[chr(34)+\"CODE_SIGNING_ALLOWED\"+chr(34)] = \"NO\"\n      config.build_settings[chr(34)+\"CODE_SIGNING_REQUIRED\"+chr(34)] = \"NO\"\n    end\n  end\n'
+          content = content.replace('post_install do |installer|', 'post_install do |installer|\n' + patch)
+          open('Podfile', 'w').write(content)
+          "
 
       - name: Install CocoaPods
         working-directory: runexo-cap/ios/App
