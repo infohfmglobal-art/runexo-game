@@ -37,12 +37,29 @@ jobs:
       - name: Patch Podfile for code signing
         working-directory: runexo-cap/ios/App
         run: |
-          python3 -c "
-          content = open('Podfile').read()
-          patch = '  installer.pods_project.targets.each do |target|\n    target.build_configurations.each do |config|\n      config.build_settings[chr(34)+\"CODE_SIGNING_ALLOWED\"+chr(34)] = \"NO\"\n      config.build_settings[chr(34)+\"CODE_SIGNING_REQUIRED\"+chr(34)] = \"NO\"\n    end\n  end\n'
-          content = content.replace('post_install do |installer|', 'post_install do |installer|\n' + patch)
+          python3 - <<'PYEOF'
+          content = open('Podfile', 'r').read()
+          inject = (
+            "\n  installer.pods_project.targets.each do |target|\n"
+            "    target.build_configurations.each do |config|\n"
+            "      config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'\n"
+            "      config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'\n"
+            "      config.build_settings['EXPANDED_CODE_SIGN_IDENTITY'] = ''\n"
+            "    end\n"
+            "  end\n"
+          )
+          if 'post_install do |installer|' in content:
+            content = content.replace(
+              'post_install do |installer|',
+              'post_install do |installer|' + inject
+            )
+          else:
+            content += '\npost_install do |installer|' + inject + 'end\n'
           open('Podfile', 'w').write(content)
-          "
+          print("Podfile patched successfully")
+          PYEOF
+          echo "--- Podfile post_install block ---"
+          grep -A 15 "post_install" Podfile
 
       - name: Install CocoaPods
         working-directory: runexo-cap/ios/App
@@ -57,9 +74,11 @@ jobs:
           security create-keychain -p "temp_password" build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "temp_password" build.keychain
-          security import distribution.p12 -k build.keychain -P "build123" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "temp_password" build.keychain
-          security list-keychain -d user -s build.keychain
+          security import distribution.p12 -k build.keychain -P "build123" -T /usr/bin/codesign -T /usr/bin/xcodebuild
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "temp_password" build.keychain
+          security list-keychain -d user -s build.keychain login.keychain
+          echo "Certificate imported — verifying:"
+          security find-identity -v -p codesigning build.keychain
 
       - name: Install Provisioning Profile
         run: |
@@ -68,6 +87,7 @@ jobs:
           UUID=$(security cms -D -i profile.mobileprovision | plutil -extract UUID raw -)
           cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/${UUID}.mobileprovision
           echo "PROFILE_UUID=${UUID}" >> $GITHUB_ENV
+          echo "Provisioning profile installed: ${UUID}"
 
       - name: Setup App Store Connect API Key
         run: |
@@ -86,11 +106,12 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
             PROVISIONING_PROFILE_SPECIFIER="${{ env.PROFILE_UUID }}" \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
+            OTHER_CODE_SIGN_FLAGS="--keychain build.keychain"
 
       - name: Export IPA
         run: |
-          cat > /tmp/ExportOptions.plist << EOF
+          cat > /tmp/ExportOptions.plist << 'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -98,7 +119,7 @@ jobs:
             <key>method</key>
             <string>app-store-connect</string>
             <key>teamID</key>
-            <string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <string>VM337XCL53</string>
             <key>signingStyle</key>
             <string>manual</string>
             <key>signingCertificate</key>
