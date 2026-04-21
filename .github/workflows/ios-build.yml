@@ -29,52 +29,141 @@ jobs:
 
       - name: Install Capacitor dependencies
         working-directory: runexo-cap
-        run: npm install
+        run: |
+          npm install
+          npm install @capacitor-community/apple-sign-in
+          echo "Installed packages:"
+          ls node_modules/@capacitor-community/ 2>/dev/null || true
 
       - name: Add iOS platform
         working-directory: runexo-cap
         run: npx cap add ios
 
+      - name: Add Apple Sign-In entitlement to iOS project
+        run: |
+          ENTITLEMENTS="runexo-cap/ios/App/App/App.entitlements"
+          echo "=== Current App.entitlements ==="
+          cat "$ENTITLEMENTS" 2>/dev/null || echo "(not found)"
+
+          if [ -f "$ENTITLEMENTS" ]; then
+            # Add Sign in with Apple entitlement if not already present
+            if ! grep -q "com.apple.developer.applesignin" "$ENTITLEMENTS"; then
+              node - "$ENTITLEMENTS" <<'JSEOF'
+const fs = require('fs');
+const path = process.argv[2];
+let content = fs.readFileSync(path, 'utf8');
+const entitlement = `\t<key>com.apple.developer.applesignin</key>\n\t<array>\n\t\t<string>Default</string>\n\t</array>\n`;
+// Insert before closing </dict>
+content = content.replace('</dict>\n</plist>', entitlement + '</dict>\n</plist>');
+fs.writeFileSync(path, content);
+console.log('Apple Sign-In entitlement added successfully');
+JSEOF
+            else
+              echo "Apple Sign-In entitlement already present"
+            fi
+          else
+            echo "WARNING: App.entitlements not found, creating it"
+            cat > "$ENTITLEMENTS" << 'PLIST_EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+        <key>com.apple.developer.applesignin</key>
+        <array>
+                <string>Default</string>
+        </array>
+</dict>
+</plist>
+PLIST_EOF
+            echo "Created App.entitlements with Apple Sign-In"
+          fi
+
+          echo "=== Updated App.entitlements ==="
+          cat "$ENTITLEMENTS"
+
       - name: Inject latest game files into Capacitor webDir
         run: |
-          WEB_DIR=$(python3 -c "
-          import json, sys
-          try:
-            with open('runexo-cap/capacitor.config.json') as f:
-              print(json.load(f).get('webDir','www'))
-          except:
-            print('www')
-          ")
-          echo "webDir: $WEB_DIR"
+          echo "=== Detecting webDir ==="
+          # Try capacitor.config.json first
+          if [ -f "runexo-cap/capacitor.config.json" ]; then
+            WEB_DIR=$(node -e "const c=require('./runexo-cap/capacitor.config.json'); console.log(c.webDir||'www');")
+            echo "Detected webDir from JSON: $WEB_DIR"
+          elif [ -f "runexo-cap/capacitor.config.ts" ]; then
+            WEB_DIR=$(grep -oP "webDir\s*:\s*['\"]?\K[^'\"',}]+" runexo-cap/capacitor.config.ts | head -1)
+            [ -z "$WEB_DIR" ] && WEB_DIR="www"
+            echo "Detected webDir from TS: $WEB_DIR"
+          else
+            WEB_DIR="www"
+            echo "No config found, defaulting to: $WEB_DIR"
+          fi
+
+          echo "=== Copying game files to $WEB_DIR ==="
           mkdir -p "runexo-cap/$WEB_DIR"
-          cp index.html "runexo-cap/$WEB_DIR/" 2>/dev/null || true
-          cp app.js "runexo-cap/$WEB_DIR/" 2>/dev/null || true
-          cp style.css "runexo-cap/$WEB_DIR/" 2>/dev/null || true
-          cp manifest.json "runexo-cap/$WEB_DIR/" 2>/dev/null || true
-          cp sw.js "runexo-cap/$WEB_DIR/" 2>/dev/null || true
-          cp firebase-config.js "runexo-cap/$WEB_DIR/" 2>/dev/null || true
-          cp -r icons "runexo-cap/$WEB_DIR/" 2>/dev/null || true
-          cp -r images "runexo-cap/$WEB_DIR/" 2>/dev/null || true
-          cp -r sound "runexo-cap/$WEB_DIR/" 2>/dev/null || true
-          echo "Game files injected into $WEB_DIR"
+          cp index.html "runexo-cap/$WEB_DIR/" 2>/dev/null && echo "Copied: index.html" || echo "MISSING: index.html"
+          cp app.js "runexo-cap/$WEB_DIR/" 2>/dev/null && echo "Copied: app.js" || echo "MISSING: app.js"
+          cp style.css "runexo-cap/$WEB_DIR/" 2>/dev/null && echo "Copied: style.css" || echo "MISSING: style.css"
+          cp manifest.json "runexo-cap/$WEB_DIR/" 2>/dev/null && echo "Copied: manifest.json" || true
+          cp sw.js "runexo-cap/$WEB_DIR/" 2>/dev/null && echo "Copied: sw.js" || true
+          cp firebase-config.js "runexo-cap/$WEB_DIR/" 2>/dev/null && echo "Copied: firebase-config.js" || true
+          cp -r icons "runexo-cap/$WEB_DIR/" 2>/dev/null && echo "Copied: icons/" || true
+          cp -r images "runexo-cap/$WEB_DIR/" 2>/dev/null && echo "Copied: images/" || true
+          cp -r sound "runexo-cap/$WEB_DIR/" 2>/dev/null && echo "Copied: sound/" || true
+
+          echo "=== webDir contents ==="
+          ls -la "runexo-cap/$WEB_DIR/"
+
+          echo "=== Verify isIOSApp in app.js ==="
+          grep "isIOSApp" "runexo-cap/$WEB_DIR/app.js" | head -5 || echo "WARNING: isIOSApp not found in injected app.js"
 
       - name: Sync web files
         working-directory: runexo-cap
         run: npx cap sync ios
 
+      - name: Verify and overwrite game files in iOS native public folder
+        run: |
+          echo "=== Finding iOS native public folder ==="
+          IOS_PUBLIC=$(find runexo-cap/ios -name "index.html" -not -path "*/node_modules/*" 2>/dev/null | head -1 | xargs dirname 2>/dev/null)
+          if [ -n "$IOS_PUBLIC" ]; then
+            echo "Found iOS public folder: $IOS_PUBLIC"
+            cp app.js "$IOS_PUBLIC/" 2>/dev/null && echo "Overwrote: app.js in iOS" || echo "FAILED: app.js copy"
+            cp index.html "$IOS_PUBLIC/" 2>/dev/null && echo "Overwrote: index.html in iOS" || echo "FAILED: index.html copy"
+            cp style.css "$IOS_PUBLIC/" 2>/dev/null && echo "Overwrote: style.css in iOS" || echo "FAILED: style.css copy"
+            echo "=== Verify isIOSApp in iOS native app.js ==="
+            grep "isIOSApp" "$IOS_PUBLIC/app.js" | head -5 || echo "WARNING: isIOSApp NOT found in iOS native app.js!"
+            echo "=== Verify viewport-fit in iOS native index.html ==="
+            grep "viewport-fit" "$IOS_PUBLIC/index.html" || echo "WARNING: viewport-fit NOT found!"
+          else
+            echo "ERROR: Could not find iOS public folder — cap sync may have failed!"
+          fi
+
       - name: Replace iOS App Icons with Dragon Icon
         run: |
           SOURCE="$GITHUB_WORKSPACE/icons/icon-512.png"
           ICONSET="runexo-cap/ios/App/App/Assets.xcassets/AppIcon.appiconset"
+
+          echo "=== Source icon info ==="
+          sips -g pixelWidth -g pixelHeight "$SOURCE"
+
+          echo "=== Generating 1024x1024 source for App Store icon ==="
+          SOURCE_1024="/tmp/icon-1024.png"
+          sips -z 1024 1024 "$SOURCE" --out "$SOURCE_1024"
+          sips -g pixelWidth -g pixelHeight "$SOURCE_1024"
+
           echo "=== Files in AppIcon.appiconset BEFORE replacement ==="
           ls -la "$ICONSET"
+
           for f in "$ICONSET"/*.png; do
             size=$(sips -g pixelWidth "$f" 2>/dev/null | tail -n1 | awk '{print $2}')
             if [ -n "$size" ] && [ "$size" -gt 0 ]; then
               echo "Replacing: $f at ${size}x${size}"
-              sips -z "$size" "$size" "$SOURCE" --out "$f"
+              if [ "$size" -ge 512 ]; then
+                sips -z "$size" "$size" "$SOURCE_1024" --out "$f"
+              else
+                sips -z "$size" "$size" "$SOURCE" --out "$f"
+              fi
             fi
           done
+
           echo "=== Files in AppIcon.appiconset AFTER replacement ==="
           ls -la "$ICONSET"
           echo "All icons replaced with dragon icon successfully"
