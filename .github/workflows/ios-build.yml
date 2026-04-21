@@ -39,6 +39,41 @@ jobs:
         working-directory: runexo-cap
         run: npx cap add ios
 
+      - name: Replace placeholder splash screen with branded dark LaunchScreen
+        run: |
+          LAUNCH="runexo-cap/ios/App/App/LaunchScreen.storyboard"
+          echo "=== Replacing LaunchScreen.storyboard with branded dark version ==="
+          cat > "$LAUNCH" << 'STORYBOARD_EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23504" targetRuntime="AppleCocoa Touch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
+              <device id="retina6_12" orientation="portrait" appearance="light"/>
+              <dependencies>
+                  <deployment identifier="iOS"/>
+                  <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23504"/>
+                  <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+                  <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+              </dependencies>
+              <scenes>
+                  <scene sceneID="EHf-IW-A2E">
+                      <objects>
+                          <viewController id="01J-lp-oVM" sceneMemberID="viewController">
+                              <view key="view" contentMode="scaleToFill" id="Ze5-6b-2t3">
+                                  <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
+                                  <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                                  <viewLayoutGuide key="safeAreaLayoutGuide" id="Bcu-3y-fUS"/>
+                                  <color key="backgroundColor" red="0.019607843" green="0.031372549" blue="0.086274509" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                              </view>
+                          </viewController>
+                          <placeholder placeholderIdentifier="IBFirstResponder" id="iYj-Kq-Ea1" userLabel="First Responder" sceneMemberID="firstResponder"/>
+                      </objects>
+                      <point key="canvasLocation" x="53" y="375"/>
+                  </scene>
+              </scenes>
+          </document>
+          STORYBOARD_EOF
+          echo "=== Custom LaunchScreen.storyboard written ==="
+          cat "$LAUNCH"
+
       - name: Add Apple Sign-In entitlement to iOS project
         run: |
           ENTITLEMENTS="runexo-cap/ios/App/App/App.entitlements"
