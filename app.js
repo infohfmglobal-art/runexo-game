@@ -62,6 +62,9 @@ const GoogleAuth =
 
 const isAndroidApp =
   !!(window.Capacitor && typeof Capacitor.isNativePlatform === "function" && Capacitor.isNativePlatform());
+const isIOSApp =
+  !!(window.Capacitor && typeof Capacitor.isNativePlatform === "function" && Capacitor.isNativePlatform() &&
+    typeof Capacitor.getPlatform === "function" && Capacitor.getPlatform() === "ios");
 
 console.log("UserAgent:", navigator.userAgent);
 console.log("Capacitor exists:", !!window.Capacitor);
@@ -1130,6 +1133,15 @@ function init() {
   updateLeaderboardFromState();
   setupAuthListener();
   applyCrazyGamesMode();
+
+  if (isIOSApp) {
+    const googleBtn = document.getElementById("btnLoginGoogle");
+    if (googleBtn) googleBtn.style.display = "none";
+    const onlineBtn = document.getElementById("btnOnlineComing");
+    if (onlineBtn) onlineBtn.style.display = "none";
+    const matchStakeRow = document.getElementById("matchStakeRow");
+    if (matchStakeRow) matchStakeRow.closest(".setting-block")?.remove();
+  }
 }
 
 document.addEventListener("DOMContentLoaded", init);
