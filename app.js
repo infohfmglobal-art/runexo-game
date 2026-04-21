@@ -53,6 +53,35 @@ function cgMaybeShowMidgameAd(onDone) {
   }
 }
 
+// --------------------- GAMEMONETIZE SDK ---------------------
+
+let _gmRoundCount = 0;
+let _gmBannerCount = 0;
+
+function gmMaybeShowAd(onDone) {
+  _gmRoundCount++;
+  if (!window._gmSdkReady || typeof sdk === 'undefined' || _gmRoundCount % 2 !== 0) {
+    onDone?.();
+    return;
+  }
+  try {
+    window._gmMusicWasOn = state.musicOn;
+    sdk.showAd();
+    onDone?.();
+  } catch (e) {
+    console.warn('GM ad error', e);
+    onDone?.();
+  }
+}
+
+// Show banner every 3 completed games
+function gmMaybeShowBanner() {
+  _gmBannerCount++;
+  if (_gmBannerCount % 3 !== 0) return;
+  if (!window._gmSdkReady || typeof sdk === 'undefined') return;
+  try { sdk.showBanner(); } catch(e) { console.warn('GM banner error', e); }
+}
+
 // --------------------- CAPACITOR / PLATFORM ---------------------
 
 const GoogleAuth =
@@ -62,13 +91,19 @@ const GoogleAuth =
 
 const isAndroidApp =
   !!(window.Capacitor && typeof Capacitor.isNativePlatform === "function" && Capacitor.isNativePlatform());
+
 const isIOSApp =
-  !!(window.Capacitor && typeof Capacitor.isNativePlatform === "function" && Capacitor.isNativePlatform() &&
-    typeof Capacitor.getPlatform === "function" && Capacitor.getPlatform() === "ios");
+  !!(window.Capacitor && typeof Capacitor.isNativePlatform === "function" && Capacitor.isNativePlatform()) &&
+  (
+    /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    (typeof Capacitor.getPlatform === "function" && Capacitor.getPlatform() === "ios") ||
+    (typeof Capacitor.getPlatform === "function" && Capacitor.getPlatform() === "web" && /iphone|ipad|ipod/i.test(navigator.userAgent))
+  );
 
 console.log("UserAgent:", navigator.userAgent);
 console.log("Capacitor exists:", !!window.Capacitor);
 console.log("isAndroidApp =", isAndroidApp);
+console.log("isIOSApp =", isIOSApp);
 
 // Initialize GoogleAuth only on native Android if plugin exists
 if (isAndroidApp && GoogleAuth?.initialize) {
@@ -155,6 +190,7 @@ window.els = {
   nicknameInput: document.getElementById("nicknameInput"),
   btnPlayGuest: document.getElementById("btnPlayGuest"),
   btnLoginGoogle: document.getElementById("btnLoginGoogle"),
+  btnLoginApple: document.getElementById("btnLoginApple"),
   loginStatusText: document.getElementById("loginStatusText"),
   statPlayerName: document.getElementById("statPlayerName"),
   statCoins: document.getElementById("statCoins"),
@@ -176,7 +212,11 @@ window.els = {
   gameCoinsDisplay: document.getElementById("gameCoinsDisplay"),
   board: document.getElementById("board"),
   gameStatus: document.getElementById("gameStatus"),
-  btnBackHome: document.getElementById("btnBackHome"),
+  btnPauseMenu: document.getElementById("btnPauseMenu"),
+  pauseOverlay: document.getElementById("pauseOverlay"),
+  btnResumeGame: document.getElementById("btnResumeGame"),
+  btnRestartRound: document.getElementById("btnRestartRound"),
+  btnGoHome: document.getElementById("btnGoHome"),
   btnNewRound: document.getElementById("btnNewRound"),
   btnGiveUp: document.getElementById("btnGiveUp"),
   wlStats: document.getElementById("wlStats"),
@@ -356,6 +396,114 @@ function pushStateToFirestore() {
   return userDocRef.set(payload, { merge: true }).catch(err => {
     console.warn("Failed to push Firestore state", err);
   });
+}
+
+// --------------------- APPLE SIGN-IN ---------------------
+
+function generateNonce(length = 32) {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let result = "";
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+async function hashNonce(nonce) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(nonce);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash))
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function signInWithApple() {
+  if (!auth) {
+    showResultToast("Auth not ready. Try again.");
+    return;
+  }
+
+  const btn = document.getElementById("btnLoginApple");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="social-icon" viewBox="0 0 814 1000" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105-37.8-155.5-127.4C46 790.7 0 663.6 0 543.3 0 339.5 133 227.4 257.4 227.4c67.1 0 123.1 44.5 164.7 44.5 39.5 0 102.5-47.1 176.1-47.1 28.5 0 130.9 2.6 198.3 99.2zm-234-181.5c31.1-36.9 53.1-88.1 53.1-139.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.5 32.4-55.1 83.6-55.1 135.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.5-71.3z"/></svg> Signing in...`;
+  }
+
+  try {
+    const nonce = generateNonce();
+    const hashedNonce = await hashNonce(nonce);
+
+    const SignInWithApple = window.Capacitor?.Plugins?.SignInWithApple;
+    if (!SignInWithApple) {
+      showResultToast("Apple Sign-In not available on this device.");
+      return;
+    }
+
+    const result = await SignInWithApple.authorize({
+      clientId: "com.runexo.game",
+      redirectURI: "https://runexo-f09b7.firebaseapp.com/__/auth/handler",
+      scopes: "email name",
+      state: "runexo-apple-signin",
+      nonce: hashedNonce
+    });
+
+    const { identityToken, givenName, familyName } = result.response;
+    if (!identityToken) {
+      showResultToast("Apple Sign-In failed. No token received.");
+      return;
+    }
+
+    const provider = new firebase.auth.OAuthProvider("apple.com");
+    const credential = provider.credential({
+      idToken: identityToken,
+      rawNonce: nonce
+    });
+
+    const userCredential = await firebase.auth().signInWithCredential(credential);
+    currentUser = userCredential.user;
+
+    const displayName = givenName
+      ? `${givenName} ${familyName || ""}`.trim()
+      : (currentUser.displayName || "Player");
+
+    if (!currentUser.displayName && displayName !== "Player") {
+      await currentUser.updateProfile({ displayName }).catch(() => {});
+    }
+
+    state.playerName = currentUser.displayName || displayName || "Player";
+    userDocRef = db ? db.collection("users").doc(currentUser.uid) : null;
+
+    if (userDocRef) {
+      try {
+        const doc = await userDocRef.get();
+        if (doc.exists) {
+          applyFirestoreData(doc.data());
+        } else {
+          await pushStateToFirestore();
+        }
+      } catch (e) {
+        console.warn("Firestore profile error", e);
+      }
+    }
+
+    saveState();
+    updateStatsUI();
+    syncControlsFromState();
+    applyTheme();
+    showSignedInUI();
+    showResultToast("Signed in as " + state.playerName);
+  } catch (err) {
+    console.error("Apple Sign-In failed", err);
+    if (err.code !== "SIGN_IN_CANCELLED" && err.message !== "The user canceled the sign-in.") {
+      showResultToast("Apple Sign-In failed. Please try again.");
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<svg class="social-icon" viewBox="0 0 814 1000" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105-37.8-155.5-127.4C46 790.7 0 663.6 0 543.3 0 339.5 133 227.4 257.4 227.4c67.1 0 123.1 44.5 164.7 44.5 39.5 0 102.5-47.1 176.1-47.1 28.5 0 130.9 2.6 198.3 99.2zm-234-181.5c31.1-36.9 53.1-88.1 53.1-139.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.5 32.4-55.1 83.6-55.1 135.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.5-71.3z"/></svg> Sign in with Apple`;
+    }
+  }
 }
 
 // --------------------- GOOGLE LOGIN ---------------------
@@ -711,6 +859,8 @@ function handleResult(result) {
   updateLeaderboardFromState();
   pushStateToFirestore();
   cgMaybeShowMidgameAd();
+  gmMaybeShowAd();
+  gmMaybeShowBanner();
 }
 
 function loadLeaderboard() {
@@ -845,7 +995,11 @@ if (els.btnToggleMusic) {
   cgLoadingStart();
   showScreen("splashStudio");
   setTimeout(() => showScreen("splashGame"), 1400);
-  setTimeout(() => { showScreen("home"); cgLoadingStop(); }, 3000);
+  setTimeout(() => {
+    showScreen("home");
+    cgLoadingStop();
+    // banner now shows every 3 completed games via gmMaybeShowBanner()
+  }, 3000);
 
   if (els.btnPlayGuest) {
     els.btnPlayGuest.addEventListener("click", () => {
@@ -860,6 +1014,10 @@ if (els.btnToggleMusic) {
 
   if (els.btnLoginGoogle) {
     els.btnLoginGoogle.addEventListener("click", signInWithGoogle);
+  }
+
+  if (els.btnLoginApple) {
+    els.btnLoginApple.addEventListener("click", signInWithApple);
   }
 
   if (els.btnLogout) {
@@ -932,9 +1090,35 @@ if (els.btnToggleMusic) {
     });
   }
 
-  if (els.btnBackHome) {
-    els.btnBackHome.addEventListener("click", () => {
+  // Pause menu
+  if (els.btnPauseMenu) {
+    els.btnPauseMenu.addEventListener('click', () => {
       if (exists(window.playClick)) window.playClick();
+      if (els.pauseOverlay) els.pauseOverlay.classList.remove('hidden');
+      gameActive = false;
+      if (exists(window.stopMusic)) window.stopMusic();
+    });
+  }
+  if (els.btnResumeGame) {
+    els.btnResumeGame.addEventListener('click', () => {
+      if (exists(window.playClick)) window.playClick();
+      if (els.pauseOverlay) els.pauseOverlay.classList.add('hidden');
+      gameActive = true;
+      if (state.musicOn && exists(window.resumeMusic)) window.resumeMusic();
+    });
+  }
+  if (els.btnRestartRound) {
+    els.btnRestartRound.addEventListener('click', () => {
+      if (exists(window.playClick)) window.playClick();
+      if (els.pauseOverlay) els.pauseOverlay.classList.add('hidden');
+      if (state.musicOn && exists(window.resumeMusic)) window.resumeMusic();
+      resetBoard();
+    });
+  }
+  if (els.btnGoHome) {
+    els.btnGoHome.addEventListener('click', () => {
+      if (exists(window.playClick)) window.playClick();
+      if (els.pauseOverlay) els.pauseOverlay.classList.add('hidden');
       backToHome();
     });
   }
@@ -1135,8 +1319,11 @@ function init() {
   applyCrazyGamesMode();
 
   if (isIOSApp) {
-    const googleBtn = document.getElementById("btnLoginGoogle");
-    if (googleBtn) googleBtn.style.display = "none";
+    // Show Sign in with Apple button on iOS (required by Apple guideline 4.8)
+    const appleBtn = document.getElementById("btnLoginApple");
+    if (appleBtn) appleBtn.classList.remove("hidden");
+
+    // Hide unimplemented features on iOS
     const onlineBtn = document.getElementById("btnOnlineComing");
     if (onlineBtn) onlineBtn.style.display = "none";
     const matchStakeRow = document.getElementById("matchStakeRow");
