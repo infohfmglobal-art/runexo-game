@@ -35,6 +35,29 @@ jobs:
         working-directory: runexo-cap
         run: npx cap add ios
 
+      - name: Inject latest game files into Capacitor webDir
+        run: |
+          WEB_DIR=$(python3 -c "
+          import json, sys
+          try:
+            with open('runexo-cap/capacitor.config.json') as f:
+              print(json.load(f).get('webDir','www'))
+          except:
+            print('www')
+          ")
+          echo "webDir: $WEB_DIR"
+          mkdir -p "runexo-cap/$WEB_DIR"
+          cp index.html "runexo-cap/$WEB_DIR/" 2>/dev/null || true
+          cp app.js "runexo-cap/$WEB_DIR/" 2>/dev/null || true
+          cp style.css "runexo-cap/$WEB_DIR/" 2>/dev/null || true
+          cp manifest.json "runexo-cap/$WEB_DIR/" 2>/dev/null || true
+          cp sw.js "runexo-cap/$WEB_DIR/" 2>/dev/null || true
+          cp firebase-config.js "runexo-cap/$WEB_DIR/" 2>/dev/null || true
+          cp -r icons "runexo-cap/$WEB_DIR/" 2>/dev/null || true
+          cp -r images "runexo-cap/$WEB_DIR/" 2>/dev/null || true
+          cp -r sound "runexo-cap/$WEB_DIR/" 2>/dev/null || true
+          echo "Game files injected into $WEB_DIR"
+
       - name: Sync web files
         working-directory: runexo-cap
         run: npx cap sync ios
@@ -43,20 +66,17 @@ jobs:
         run: |
           SOURCE="$GITHUB_WORKSPACE/icons/icon-512.png"
           ICONSET="runexo-cap/ios/App/App/Assets.xcassets/AppIcon.appiconset"
-          echo "Replacing icons in: $ICONSET"
-          ls "$ICONSET"
-          sips -z 40   40   "$SOURCE" --out "$ICONSET/AppIcon-20@2x.png"
-          sips -z 60   60   "$SOURCE" --out "$ICONSET/AppIcon-20@3x.png"
-          sips -z 58   58   "$SOURCE" --out "$ICONSET/AppIcon-29@2x.png"
-          sips -z 87   87   "$SOURCE" --out "$ICONSET/AppIcon-29@3x.png"
-          sips -z 80   80   "$SOURCE" --out "$ICONSET/AppIcon-40@2x.png"
-          sips -z 120  120  "$SOURCE" --out "$ICONSET/AppIcon-40@3x.png"
-          sips -z 120  120  "$SOURCE" --out "$ICONSET/AppIcon-60@2x.png"
-          sips -z 180  180  "$SOURCE" --out "$ICONSET/AppIcon-60@3x.png"
-          sips -z 76   76   "$SOURCE" --out "$ICONSET/AppIcon-76@1x.png"
-          sips -z 152  152  "$SOURCE" --out "$ICONSET/AppIcon-76@2x.png"
-          sips -z 167  167  "$SOURCE" --out "$ICONSET/AppIcon-83.5@2x.png"
-          sips -z 1024 1024 "$SOURCE" --out "$ICONSET/AppIcon-1024@1x.png"
+          echo "=== Files in AppIcon.appiconset BEFORE replacement ==="
+          ls -la "$ICONSET"
+          for f in "$ICONSET"/*.png; do
+            size=$(sips -g pixelWidth "$f" 2>/dev/null | tail -n1 | awk '{print $2}')
+            if [ -n "$size" ] && [ "$size" -gt 0 ]; then
+              echo "Replacing: $f at ${size}x${size}"
+              sips -z "$size" "$size" "$SOURCE" --out "$f"
+            fi
+          done
+          echo "=== Files in AppIcon.appiconset AFTER replacement ==="
+          ls -la "$ICONSET"
           echo "All icons replaced with dragon icon successfully"
 
       - name: Patch Podfile for code signing
