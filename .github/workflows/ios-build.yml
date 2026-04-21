@@ -31,7 +31,7 @@ jobs:
         working-directory: runexo-cap
         run: |
           npm install
-          npm install @capacitor-community/apple-sign-in
+          npm install @capacitor-community/apple-sign-in@^6.0.0 --legacy-peer-deps
           echo "Installed packages:"
           ls node_modules/@capacitor-community/ 2>/dev/null || true
 
