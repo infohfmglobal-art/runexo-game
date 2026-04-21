@@ -44,40 +44,18 @@ jobs:
           ENTITLEMENTS="runexo-cap/ios/App/App/App.entitlements"
           echo "=== Current App.entitlements ==="
           cat "$ENTITLEMENTS" 2>/dev/null || echo "(not found)"
-
           if [ -f "$ENTITLEMENTS" ]; then
-            # Add Sign in with Apple entitlement if not already present
             if ! grep -q "com.apple.developer.applesignin" "$ENTITLEMENTS"; then
-              node - "$ENTITLEMENTS" <<'JSEOF'
-const fs = require('fs');
-const path = process.argv[2];
-let content = fs.readFileSync(path, 'utf8');
-const entitlement = `\t<key>com.apple.developer.applesignin</key>\n\t<array>\n\t\t<string>Default</string>\n\t</array>\n`;
-// Insert before closing </dict>
-content = content.replace('</dict>\n</plist>', entitlement + '</dict>\n</plist>');
-fs.writeFileSync(path, content);
-console.log('Apple Sign-In entitlement added successfully');
-JSEOF
+              sed -i '' 's|</dict>|<key>com.apple.developer.applesignin<\/key><array><string>Default<\/string><\/array><\/dict>|' "$ENTITLEMENTS"
+              echo "Apple Sign-In entitlement added via sed"
             else
               echo "Apple Sign-In entitlement already present"
             fi
           else
-            echo "WARNING: App.entitlements not found, creating it"
-            cat > "$ENTITLEMENTS" << 'PLIST_EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-        <key>com.apple.developer.applesignin</key>
-        <array>
-                <string>Default</string>
-        </array>
-</dict>
-</plist>
-PLIST_EOF
-            echo "Created App.entitlements with Apple Sign-In"
+            echo "App.entitlements not found — creating it"
+            printf '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n<key>com.apple.developer.applesignin</key>\n<array>\n<string>Default</string>\n</array>\n</dict>\n</plist>\n' > "$ENTITLEMENTS"
+            echo "Created App.entitlements"
           fi
-
           echo "=== Updated App.entitlements ==="
           cat "$ENTITLEMENTS"
 
